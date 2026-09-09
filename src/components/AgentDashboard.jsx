@@ -19,9 +19,11 @@ export default function AgentDashboard({ leads, setLeads }) {
   const filteredLeads = leads.filter(l => {
     const matchesCat = filterCategory === 'All' || l.category === filterCategory;
     const matchesStatus = filterStatus === 'All' || l.status === filterStatus;
-    const matchesSearch = l.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          l.phone.includes(searchTerm) || 
-                          l.state.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = l.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          l.phone.includes(searchTerm) ||
+                          l.state.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          (l.campaignId || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          (l.source || '').toLowerCase().includes(searchTerm.toLowerCase());
     return matchesCat && matchesStatus && matchesSearch;
   });
 
@@ -186,6 +188,7 @@ export default function AgentDashboard({ leads, setLeads }) {
                   <th className="py-3.5 px-4">Line & Prospect</th>
                   <th className="py-3.5 px-4">Contact</th>
                   <th className="py-3.5 px-4">Details</th>
+                  <th className="py-3.5 px-4">Source / Campaign</th>
                   <th className="py-3.5 px-4">Quoted Estimate</th>
                   <th className="py-3.5 px-4">Cross-Sell Opportunity</th>
                   <th className="py-3.5 px-4 text-right">Action</th>
@@ -210,6 +213,15 @@ export default function AgentDashboard({ leads, setLeads }) {
 
                     <td className="py-4 px-4 text-xs font-medium text-slate-700 max-w-xs">
                       {lead.details}
+                    </td>
+
+                    <td className="py-4 px-4 text-xs">
+                      <div className="text-slate-600 font-semibold">{lead.source || '—'}</div>
+                      {lead.campaignId && (
+                        <code className="mt-1 inline-block font-mono text-[10px] text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                          {lead.campaignId}
+                        </code>
+                      )}
                     </td>
 
                     <td className="py-4 px-4 font-bold text-emerald-800">

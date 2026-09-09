@@ -53,6 +53,47 @@ const LINES = [
   { id: 'home',     label: 'Home & Annuity',              color: 'amber' },
 ];
 
+// ── Demo Lead Generator (attaches campaignId to every lead the tick produces) ──
+const LEAD_FIRST_NAMES = ['Thomas', 'Sandra', 'William', 'Deborah', 'Kenneth', 'Patricia', 'Harold', 'Linda', 'Ronald', 'Betty'];
+const LEAD_LAST_NAMES  = ['Wright', 'Collins', 'Harris', 'King', 'Scott', 'Bennett', 'Foster', 'Grant', 'Hayes', 'Morrison'];
+
+const LEAD_TEMPLATES = {
+  life:     { details: 'Age 68 • $15,000 Whole Life • Non-Smoker',        rate: '$34.50 - $52/mo' },
+  auto:     { details: '2 Vehicles • Current Carrier Switcher',            rate: '$92 - $135/mo' },
+  medicare: { details: 'Turning 65 • Enrolled in Part A/B',                rate: '$0 - $40/mo' },
+  home:     { details: 'Single Family Home • Wants Auto Bundle Quote',     rate: '$70 - $110/mo' },
+};
+
+function generateCampaignLeads(count, { campaignId, adId, line, targetStates, agentId }) {
+  const states = targetStates.split(',').map(s => s.trim()).filter(Boolean);
+  const lineMeta = LINES.find(l => l.id === line);
+  const template = LEAD_TEMPLATES[line] || LEAD_TEMPLATES.life;
+
+  return Array.from({ length: count }, () => {
+    const first = LEAD_FIRST_NAMES[Math.floor(Math.random() * LEAD_FIRST_NAMES.length)];
+    const last  = LEAD_LAST_NAMES[Math.floor(Math.random() * LEAD_LAST_NAMES.length)];
+    return {
+      id: `LEAD-${Date.now()}-${Math.floor(Math.random() * 9000 + 1000)}`,
+      category: line,
+      categoryLabel: lineMeta?.label || line,
+      name: `${first} ${last}`,
+      phone: `(757) ${Math.floor(200 + Math.random() * 700)}-${Math.floor(1000 + Math.random() * 8000)}`,
+      email: `${first.toLowerCase()}.${last.toLowerCase()}@gmail.com`,
+      state: states[Math.floor(Math.random() * states.length)] || 'VA',
+      details: template.details,
+      estimatedRate: template.rate,
+      preferredTime: 'Morning (9am - 12pm)',
+      source: 'Meta Ads Autopilot',
+      campaignId,
+      adId,
+      submittedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      score: 'New (Autopilot)',
+      status: 'New',
+      agentId,
+    };
+  });
+}
+
 const STATUS_COLORS = {
   idle:    'bg-slate-100 text-slate-600',
   running: 'bg-emerald-100 text-emerald-700',
@@ -138,7 +179,7 @@ function ActivityLog({ events }) {
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-export default function CampaignManager({ currentAgent }) {
+export default function CampaignManager({ currentAgent, setLeads }) {
   // Config State
   const [selectedLine, setSelectedLine]   = useState('life');
   const [weeklyBudget, setWeeklyBudget]   = useState(700);
@@ -183,6 +224,17 @@ export default function CampaignManager({ currentAgent }) {
       setImpressions(prev => prev + parseInt(insights.impressions, 10));
       setCpl(newCpl);
 
+      if (newLeads > 0 && setLeads) {
+        const freshLeads = generateCampaignLeads(newLeads, {
+          campaignId: cId,
+          adId,
+          line: selectedLine,
+          targetStates,
+          agentId: currentAgent?.id,
+        });
+        setLeads(prev => [...freshLeads, ...prev]);
+      }
+
       const accLeads = currentLeads + newLeads;
       const paceLeads = quota * (tickCount / 14); // 14 ticks = full week
 
@@ -205,7 +257,7 @@ export default function CampaignManager({ currentAgent }) {
     } catch (err) {
       addEvent(`API Error: ${err.message}`, 'error');
     }
-  }, [weeklyBudget, tickCount, addEvent]);
+  }, [weeklyBudget, tickCount, addEvent, adId, selectedLine, targetStates, currentAgent, setLeads]);
 
   // ── Launch Campaign ────────────────────────────────────────────────────────
   const handleLaunch = async () => {

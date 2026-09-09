@@ -56,7 +56,7 @@ export default function AgentHub({ currentAgent, leads, setLeads, logout }) {
       case 'training':     return <TrainingCenter />;
       case 'tools':        return <AgentTools currentAgent={currentAgent} />;
       case 'marketplace':  return <AgentMarketplace currentAgent={currentAgent} />;
-      case 'campaigns':    return <CampaignManager currentAgent={currentAgent} />;
+      case 'campaigns':    return <CampaignManager currentAgent={currentAgent} setLeads={setLeads} />;
       case 'admin':        return <AdminSettings currentAgent={currentAgent} />;
       default:             return null;
     }
