@@ -5,8 +5,7 @@ import {
   Home, Car, HeartPulse, ShieldCheck, TrendingUp, DollarSign,
   Filter, Download, Trash2, StickyNote
 } from 'lucide-react';
-
-const STORAGE_KEY = 'lp_crm_clients';
+import { api } from '../../services/api';
 
 const LINE_COLORS = {
   life:     { bg: 'bg-emerald-100', text: 'text-emerald-800', border: 'border-emerald-300', icon: ShieldCheck },
@@ -26,26 +25,8 @@ const BLANK_CLIENT = {
   notes: [], createdAt: ''
 };
 
-const SEED_CLIENTS = [
-  { id: 'c-001', name: 'Dorothy Vance', phone: '(757) 555-8912', email: 'dvance64@gmail.com', dob: '1957-04-12', state: 'VA', status: 'Active', lines: ['life'], premium: '$34.50/mo', carrier: 'Mutual of Omaha', agentId: 'agent-001', notes: [{ text: 'Prefers morning calls. Enrolled Nov 2024.', date: '2024-11-10', author: 'LP' }], createdAt: '2024-11-10' },
-  { id: 'c-002', name: 'Gregory Stephens', phone: '(757) 555-3104', email: 'gstephens_va@aol.com', dob: '1968-09-03', state: 'VA', status: 'Active', lines: ['home', 'auto'], premium: '$158/mo', carrier: 'Travelers', agentId: 'agent-001', notes: [{ text: 'Bundle discount applied. Renewal March 2026.', date: '2025-03-01', author: 'LP' }], createdAt: '2025-03-01' },
-  { id: 'c-003', name: 'Barbara Watson', phone: '(757) 555-7729', email: 'bwatson_med@gmail.com', dob: '1959-11-20', state: 'VA', status: 'Active', lines: ['medicare', 'life'], premium: '$29.50/mo', carrier: 'Aetna', agentId: 'agent-001', notes: [{ text: 'Part G Supplement. Very happy with plan.', date: '2025-01-15', author: 'LP' }], createdAt: '2025-01-15' },
-  { id: 'c-004', name: 'Arthur Pendelton', phone: '(757) 555-4920', email: 'art.pendelton@gmail.com', dob: '1952-02-28', state: 'VA', status: 'Prospect', lines: ['annuity'], premium: '', carrier: '', agentId: 'agent-002', notes: [{ text: '$250k 401k rollover. Needs comparison quote.', date: '2026-07-21', author: 'MW' }], createdAt: '2026-07-21' },
-  { id: 'c-005', name: 'Melissa Richardson', phone: '(757) 555-8831', email: 'mrichardson77@yahoo.com', dob: '1977-06-15', state: 'VA', status: 'Follow-Up', lines: ['auto'], premium: '', carrier: '', agentId: 'agent-002', notes: [{ text: 'Left voicemail. Try again Thursday PM.', date: '2026-07-21', author: 'MW' }], createdAt: '2026-07-21' },
-];
-
-function loadClients() {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? JSON.parse(stored) : SEED_CLIENTS;
-  } catch { return SEED_CLIENTS; }
-}
-function saveClients(clients) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(clients));
-}
-
 export default function CRMModule({ currentAgent }) {
-  const [clients, setClients]     = useState(loadClients);
+  const [clients, setClients]     = useState([]);
   const [search, setSearch]       = useState('');
   const [filterLine, setFilterLine] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -56,7 +37,9 @@ export default function CRMModule({ currentAgent }) {
 
   const isAdmin = currentAgent?.role === 'admin';
 
-  const persist = (updated) => { setClients(updated); saveClients(updated); };
+  useEffect(() => {
+    api.getClients().then(setClients).catch(err => console.error('Failed to load clients:', err));
+  }, []);
 
   const visible = clients.filter(c => {
     if (!isAdmin && c.agentId !== currentAgent?.id) return false;
@@ -72,28 +55,45 @@ export default function CRMModule({ currentAgent }) {
   };
   const openEdit = (c) => { setEditClient({ ...c }); setShowForm(true); setSelected(null); };
 
-  const saveForm = () => {
+  const saveForm = async () => {
     if (!editClient.name) return;
     const exists = clients.find(c => c.id === editClient.id);
-    const updated = exists ? clients.map(c => c.id === editClient.id ? editClient : c) : [editClient, ...clients];
-    persist(updated);
+    try {
+      if (exists) {
+        const saved = await api.updateClient(editClient.id, editClient);
+        setClients(clients.map(c => c.id === saved.id ? saved : c));
+      } else {
+        const saved = await api.createClient(editClient);
+        setClients([saved, ...clients]);
+        setSelected(saved);
+      }
+    } catch (err) {
+      console.error('Failed to save client:', err);
+    }
     setShowForm(false); setEditClient(null);
-    if (!exists) setSelected(editClient);
   };
 
-  const deleteClient = (id) => {
+  const deleteClient = async (id) => {
     if (!window.confirm('Delete this client?')) return;
-    persist(clients.filter(c => c.id !== id));
+    try {
+      await api.deleteClient(id);
+      setClients(clients.filter(c => c.id !== id));
+    } catch (err) {
+      console.error('Failed to delete client:', err);
+    }
     setSelected(null);
   };
 
-  const addNote = () => {
+  const addNote = async () => {
     if (!newNote.trim() || !selected) return;
-    const note = { text: newNote.trim(), date: new Date().toISOString().split('T')[0], author: currentAgent?.initials };
-    const updated = clients.map(c => c.id === selected.id ? { ...c, notes: [note, ...c.notes] } : c);
-    persist(updated);
-    setSelected(updated.find(c => c.id === selected.id));
-    setNewNote('');
+    try {
+      const updatedClient = await api.addClientNote(selected.id, newNote.trim());
+      setClients(clients.map(c => c.id === updatedClient.id ? updatedClient : c));
+      setSelected(updatedClient);
+      setNewNote('');
+    } catch (err) {
+      console.error('Failed to add note:', err);
+    }
   };
 
   const toggleLine = (line) => {

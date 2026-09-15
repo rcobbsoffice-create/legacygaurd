@@ -6,6 +6,7 @@ import {
   Settings2, Loader2, ArrowUpRight, Bell
 } from 'lucide-react';
 import * as MetaAPI from '../../services/metaApi';
+import { api } from '../../services/api';
 
 // Inline Meta/Facebook icon (not in lucide-react)
 const FacebookIcon = ({ className }) => (
@@ -233,6 +234,7 @@ export default function CampaignManager({ currentAgent, setLeads }) {
           agentId: currentAgent?.id,
         });
         setLeads(prev => [...freshLeads, ...prev]);
+        freshLeads.forEach(l => api.submitPublicLead(l).catch(err => console.error('Failed to save autopilot lead:', err)));
       }
 
       const accLeads = currentLeads + newLeads;

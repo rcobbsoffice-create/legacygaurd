@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, CheckCircle2, ShieldCheck, ArrowRight, ArrowLeft, Lock, Sparkles, Phone, User, Mail, Calendar, Car, Home, TrendingUp, HeartPulse } from 'lucide-react';
+import { api } from '../services/api';
 
 export default function QuoteQuizModal({ isOpen, onClose, onLeadSubmit, initialCategory = 'life' }) {
   const [category, setCategory] = useState(initialCategory);
@@ -67,7 +68,7 @@ export default function QuoteQuizModal({ isOpen, onClose, onLeadSubmit, initialC
 
   const currentEst = calculateEstimate();
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.fullName || !formData.phone) {
       alert("Please enter your name and phone number so Lawrence Poole can lock in your quote.");
@@ -103,6 +104,12 @@ export default function QuoteQuizModal({ isOpen, onClose, onLeadSubmit, initialC
       score: category === 'annuity' ? 'HIGH TICKET ($150k+)' : 'High Intent (96%)',
       status: 'New'
     };
+
+    try {
+      await api.submitPublicLead(newLead);
+    } catch (err) {
+      console.error('Failed to save lead to server:', err);
+    }
 
     onLeadSubmit(newLead);
     setSubmitted(true);

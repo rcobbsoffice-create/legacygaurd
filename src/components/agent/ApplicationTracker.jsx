@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ClipboardList, Plus, Check, X, ChevronRight, DollarSign,
   Calendar, Building, User, TrendingUp, AlertCircle, CheckCircle2,
   Clock, Loader2, FileCheck, Filter, Download
 } from 'lucide-react';
-
-const STORAGE_KEY = 'lp_applications';
+import { api } from '../../services/api';
 
 const STATUSES = ['Submitted', 'Underwriting', 'Approved', 'Issued', 'Active', 'Declined'];
 const STATUS_CFG = {
@@ -20,23 +19,10 @@ const STATUS_CFG = {
 const LINES = ['life','living','auto','home','annuity','medicare'];
 const CARRIERS = ['Mutual of Omaha','Americo','Aetna','Cigna','Progressive','Travelers','USAA','Transamerica','North American','Foresters'];
 
-const SEED_APPS = [
-  { id:'app-001', clientName:'Dorothy Vance',    carrier:'Mutual of Omaha', line:'life',    product:'Simplified Issue Whole Life', annualPremium:'$414',    status:'Active',       submittedDate:'2024-11-10', agentId:'agent-001', faceAmount:'$15,000', notes:'Day 1 coverage. No exam.' },
-  { id:'app-002', clientName:'Gregory Stephens', carrier:'Travelers',       line:'home',    product:'HO-3 Homeowners + Auto Bundle', annualPremium:'$1,896', status:'Active',       submittedDate:'2025-03-01', agentId:'agent-001', faceAmount:'$380,000',notes:'Bundle discount applied.' },
-  { id:'app-003', clientName:'Barbara Watson',   carrier:'Aetna',           line:'medicare',product:'Plan G Medigap Supplement',    annualPremium:'$354',    status:'Active',       submittedDate:'2025-01-15', agentId:'agent-001', faceAmount:'N/A',     notes:'OEP enrollment. Part A/B verified.' },
-  { id:'app-004', clientName:'Arthur Pendelton', carrier:'North American',  line:'annuity', product:'Fixed Index Annuity',           annualPremium:'$0 (lump sum $250k)', status:'Underwriting', submittedDate:'2026-07-20', agentId:'agent-002', faceAmount:'$250,000',notes:'Pending suitability review.' },
-  { id:'app-005', clientName:'Melissa Richardson',carrier:'Progressive',    line:'auto',    product:'Multi-Vehicle Comprehensive',  annualPremium:'$1,104',  status:'Submitted',    submittedDate:'2026-07-21', agentId:'agent-002', faceAmount:'N/A',     notes:'2 vehicles. Awaiting MVR.' },
-];
-
 const BLANK = { id:'', clientName:'', carrier:'', line:'life', product:'', annualPremium:'', faceAmount:'', status:'Submitted', submittedDate:new Date().toISOString().split('T')[0], agentId:'', notes:'' };
 
-function loadApps() {
-  try { const s = localStorage.getItem(STORAGE_KEY); return s ? JSON.parse(s) : SEED_APPS; } catch { return SEED_APPS; }
-}
-function saveApps(apps) { localStorage.setItem(STORAGE_KEY, JSON.stringify(apps)); }
-
 export default function ApplicationTracker({ currentAgent }) {
-  const [apps, setApps]           = useState(loadApps);
+  const [apps, setApps]           = useState([]);
   const [filterLine, setFilterLine] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [showForm, setShowForm]   = useState(false);
@@ -45,7 +31,9 @@ export default function ApplicationTracker({ currentAgent }) {
 
   const isAdmin = currentAgent?.role === 'admin';
 
-  const persist = (updated) => { setApps(updated); saveApps(updated); };
+  useEffect(() => {
+    api.getApplications().then(setApps).catch(err => console.error('Failed to load applications:', err));
+  }, []);
 
   const visible = apps.filter(a => {
     if (!isAdmin && a.agentId !== currentAgent?.id) return false;
@@ -61,19 +49,32 @@ export default function ApplicationTracker({ currentAgent }) {
 
   const counts = STATUSES.reduce((acc, s) => ({ ...acc, [s]: visible.filter(a => a.status === s).length }), {});
 
-  const saveForm = () => {
+  const saveForm = async () => {
     if (!form.clientName) return;
-    const id = form.id || `app-${Date.now()}`;
-    const entry = { ...form, id, agentId: form.agentId || currentAgent?.id };
-    const exists = apps.find(a => a.id === id);
-    persist(exists ? apps.map(a => a.id === id ? entry : a) : [entry, ...apps]);
+    const exists = form.id && apps.find(a => a.id === form.id);
+    try {
+      if (exists) {
+        const saved = await api.updateApplication(form.id, form);
+        setApps(apps.map(a => a.id === saved.id ? saved : a));
+      } else {
+        const saved = await api.createApplication({ ...form, agentId: form.agentId || currentAgent?.id });
+        setApps([saved, ...apps]);
+      }
+    } catch (err) {
+      console.error('Failed to save application:', err);
+    }
     setShowForm(false); setForm({ ...BLANK });
   };
 
-  const advance = (app) => {
+  const advance = async (app) => {
     const idx = STATUSES.indexOf(app.status);
     if (idx < STATUSES.length - 2) {
-      persist(apps.map(a => a.id === app.id ? { ...a, status: STATUSES[idx + 1] } : a));
+      try {
+        const saved = await api.updateApplication(app.id, { status: STATUSES[idx + 1] });
+        setApps(apps.map(a => a.id === app.id ? saved : a));
+      } catch (err) {
+        console.error('Failed to advance application status:', err);
+      }
     }
   };
 
